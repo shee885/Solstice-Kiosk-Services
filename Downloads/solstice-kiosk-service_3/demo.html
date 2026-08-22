@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solstice Kiosk — Async Check-In Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#12161d;
+    --panel:#1a2029;
+    --panel-edge:#262e3a;
+    --paper:#f4efe3;
+    --paper-dim:#d9d2bf;
+    --amber:#f0a742;
+    --mint:#4fd1a5;
+    --rust:#d9614c;
+    --text:#e7e6e1;
+    --text-dim:#8b93a1;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ink);
+    color:var(--text);
+    font-family:'IBM Plex Mono', monospace;
+    min-height:100vh;
+    padding:32px 20px 60px;
+  }
+  .wrap{max-width:1040px;margin:0 auto;}
+  header{margin-bottom:36px;}
+  .eyebrow{
+    font-size:11px;letter-spacing:0.16em;text-transform:uppercase;
+    color:var(--amber);font-weight:600;margin-bottom:10px;
+  }
+  h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:clamp(28px,4vw,40px);
+    font-weight:700;margin:0 0 8px;letter-spacing:-0.01em;
+  }
+  .sub{color:var(--text-dim);font-size:14px;max-width:560px;line-height:1.6;}
+  .layout{display:grid;grid-template-columns:1fr;gap:24px;}
+  @media(min-width:840px){.layout{grid-template-columns:1.4fr 1fr;}}
+  .cards{display:flex;flex-direction:column;gap:14px;}
+  .card{
+    background:var(--panel);
+    border:1px solid var(--panel-edge);
+    border-radius:10px;
+    padding:18px 20px;
+    display:flex;align-items:center;gap:16px;
+    position:relative;overflow:hidden;
+  }
+  .slot{
+    width:54px;height:54px;border-radius:8px;
+    background:repeating-linear-gradient(135deg,#232a35,#232a35 4px,#1e242e 4px,#1e242e 8px);
+    border:1px solid var(--panel-edge);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .slot svg{width:22px;height:22px;opacity:.55;}
+  .info{flex:1;min-width:0;}
+  .name{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;}
+  .id{color:var(--text-dim);font-size:12px;margin-top:2px;}
+  .status-row{display:flex;align-items:center;gap:10px;margin-top:8px;}
+  .pill{
+    font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+    padding:4px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:6px;
+  }
+  .pill.not_checked_in{background:#232a35;color:var(--text-dim);}
+  .pill.pending{background:rgba(240,167,66,0.14);color:var(--amber);}
+  .pill.checked_in{background:rgba(79,209,165,0.14);color:var(--mint);}
+  .pill.failed{background:rgba(217,97,76,0.14);color:var(--rust);}
+  .dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+  .pending .dot{animation:pulse 1s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+  .actions{display:flex;gap:8px;flex-shrink:0;}
+  button{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;
+    border-radius:6px;border:1px solid var(--panel-edge);
+    padding:9px 14px;cursor:pointer;background:transparent;color:var(--text);
+    letter-spacing:.02em;transition:background .15s, opacity .15s;
+  }
+  button.primary{background:var(--paper);color:#1a1a17;border-color:var(--paper);}
+  button.primary:hover{opacity:.88;}
+  button.ghost:hover{background:var(--panel-edge);}
+  button:disabled{opacity:.35;cursor:not-allowed;}
+  .badge-out{
+    position:absolute;right:-90px;top:50%;transform:translateY(-50%);
+    width:74px;height:100px;background:var(--paper);border-radius:3px;
+    box-shadow:0 6px 18px rgba(0,0,0,.35);
+    transition:right .5s cubic-bezier(.2,.8,.2,1);
+    padding:8px;color:#1a1a17;
+  }
+  .badge-out.show{right:20px;}
+  .badge-out .line{height:3px;background:var(--paper-dim);margin-bottom:5px;border-radius:1px;}
+  .badge-out .line:nth-child(1){width:70%;background:#2a2a24;}
+  .badge-out .line:nth-child(2){width:50%;margin-top:14px;}
+  .badge-out .line:nth-child(3){width:60%;}
+
+  .panel-title{
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;
+    text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);
+    margin:0 0 12px;
+  }
+  .log{
+    background:var(--panel);border:1px solid var(--panel-edge);border-radius:10px;
+    padding:16px 18px;height:100%;min-height:340px;display:flex;flex-direction:column;
+  }
+  .log-body{flex:1;overflow-y:auto;display:flex;flex-direction:column-reverse;gap:8px;max-height:420px;}
+  .log-entry{font-size:12px;line-height:1.5;padding:8px 10px;border-radius:6px;background:#151b23;}
+  .log-entry .t{color:var(--text-dim);margin-right:8px;}
+  .log-entry.ok{border-left:2px solid var(--mint);}
+  .log-entry.warn{border-left:2px solid var(--amber);}
+  .log-entry.block{border-left:2px solid var(--rust);}
+  .footer-note{color:var(--text-dim);font-size:12px;margin-top:28px;line-height:1.7;max-width:680px;}
+  .footer-note b{color:var(--text);}
+  .reset{margin-top:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Solstice Events Co. · Async Print Demo</div>
+    <h1>Check-In Kiosk</h1>
+    <p class="sub">Tap "Scan Badge" for each attendee. The badge now prints on a queue — the screen shows <b style="color:var(--amber)">Printing…</b> until the printer's webhook confirms, then flips to <b style="color:var(--mint)">Checked In</b>. Try tapping Scan twice fast on one attendee — the second tap is blocked, not a second badge.</p>
+  </header>
+
+  <div class="layout">
+    <div class="cards" id="cards"></div>
+
+    <div class="log">
+      <div class="panel-title">Live event log</div>
+      <div class="log-body" id="logBody"></div>
+    </div>
+  </div>
+
+  <button class="ghost reset" id="resetBtn">Reset demo</button>
+
+  <p class="footer-note">
+    This simulates the real service: <b>Scan Badge</b> = the check-in call (returns "pending" immediately, no more waiting on the printer). A few seconds later a simulated <b>webhook</b> fires and flips the status — same as the vendor's printer calling back. Scanning again while a print is already pending is blocked, so a duplicate scan can never trigger a second badge.
+  </p>
+</div>
+
+<script>
+const ATTENDEES = [
+  { id: 'A-1001', name: 'Grace Hopper' },
+  { id: 'A-1002', name: 'Alan Turing' },
+  { id: 'A-1003', name: 'Katherine Johnson' },
+];
+
+const state = {};
+ATTENDEES.forEach(a => state[a.id] = { status: 'not_checked_in', jobId: null });
+
+const cardsEl = document.getElementById('cards');
+const logBody = document.getElementById('logBody');
+
+function log(msg, kind='ok'){
+  const el = document.createElement('div');
+  el.className = 'log-entry ' + kind;
+  const time = new Date().toLocaleTimeString([], {hour12:false});
+  el.innerHTML = `<span class="t">${time}</span>${msg}`;
+  logBody.prepend(el);
+}
+
+function statusLabel(s){
+  return {not_checked_in:'Not checked in', pending:'Printing…', checked_in:'Checked in', failed:'Print failed'}[s];
+}
+
+function render(){
+  cardsEl.innerHTML = '';
+  ATTENDEES.forEach(a => {
+    const s = state[a.id];
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="slot">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#f4efe3" stroke-width="1.6"><rect x="3" y="9" width="18" height="8" rx="1.5"/><path d="M6 9V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v4"/><rect x="7" y="14" width="10" height="6" rx="0.5"/></svg>
+      </div>
+      <div class="info">
+        <div class="name">${a.name}</div>
+        <div class="id">${a.id}</div>
+        <div class="status-row">
+          <span class="pill ${s.status}"><span class="dot"></span>${statusLabel(s.status)}</span>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="primary" data-scan="${a.id}" ${s.status==='pending'?'disabled':''}>Scan Badge</button>
+      </div>
+      <div class="badge-out ${s.status==='checked_in' ? 'show':''}" id="badge-${a.id}">
+        <div class="line"></div><div class="line"></div><div class="line"></div>
+      </div>
+    `;
+    cardsEl.appendChild(card);
+  });
+  cardsEl.querySelectorAll('[data-scan]').forEach(btn => {
+    btn.addEventListener('click', () => scan(btn.getAttribute('data-scan')));
+  });
+}
+
+function scan(id){
+  const a = ATTENDEES.find(x => x.id === id);
+  const s = state[id];
+
+  if (s.status === 'checked_in'){
+    log(`Scan received for <b>${a.name}</b> — already checked in, no badge printed`, 'warn');
+    return;
+  }
+  if (s.status === 'pending'){
+    log(`Duplicate scan blocked for <b>${a.name}</b> — a print is already in progress`, 'block');
+    return;
+  }
+
+  // claim + queue
+  const jobId = Math.random().toString(16).slice(2, 8);
+  s.status = 'pending';
+  s.jobId = jobId;
+  render();
+  log(`Scan received for <b>${a.name}</b> — print job <code>${jobId}</code> queued`, 'ok');
+
+  const delay = 1200 + Math.random() * 1400;
+  setTimeout(() => {
+    // webhook arrives
+    if (state[id].jobId !== jobId) return; // superseded, stale — ignored
+    state[id].status = 'checked_in';
+    state[id].jobId = null;
+    render();
+    log(`Webhook confirmed print for <b>${a.name}</b> — status → Checked In`, 'ok');
+  }, delay);
+}
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  ATTENDEES.forEach(a => state[a.id] = { status: 'not_checked_in', jobId: null });
+  logBody.innerHTML = '';
+  render();
+  log('Demo reset', 'warn');
+});
+
+render();
+log('Kiosk ready — tap Scan Badge to begin', 'ok');
+</script>
+</body>
+</html>
